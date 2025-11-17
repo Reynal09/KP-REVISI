@@ -1,33 +1,45 @@
 import SwiftUI
+import FirebaseFirestore
 
 
 struct TambahTransaksiView: View {
+  
+  // ⬅️ Tambahkan service Firestore
+  let transaksiService = TransaksiService()
+  
   @State private var inputNominal: String = ""
   @State private var riwayat: [Transaksii] = []
   @State private var selectedKategori_Keluar: String = "Makanan"
   @State private var selectedKategori_Masuk: String = "Investasi"
   @State private var selectedDate: Date = Date()
   @State private var showCalendar: Bool = false
-
-  var kategori_Keluar = ["Makanan": "fork.knife", "Medis":"cross.case", "Transaksi":"dollarsign.circle", "Hiburan":"gamecontroller"]
+  
+  var kategori_Keluar = [
+    "Makanan": "fork.knife",
+    "Medis": "cross.case",
+    "Transaksi": "dollarsign.circle",
+    "Hiburan": "gamecontroller"
+  ]
+  
   var kategori_Masuk = [
     "Investasi": "chart.line.uptrend.xyaxis",
     "Gaji": "banknote",
     "Bonus": "gift",
     "Uang Saku": "wallet.pass"
   ]
-
+  
   private let accent = Color.teal
   private let income = Color.green
   private let expense = Color.red
+  
   @EnvironmentObject var financeData: DataKeuangan
-
+  
   var body: some View {
     NavigationStack {
       ScrollView {
         VStack(spacing: 20) {
-
-          // Header card
+          
+          // Header
           VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
               Image(systemName: "wallet.pass")
@@ -42,24 +54,28 @@ struct TambahTransaksiView: View {
           }
           .frame(maxWidth: .infinity, alignment: .leading)
           .padding(.vertical, 8)
-
-          // Input card
+          
+          // Input Card
           VStack(spacing: 12) {
-            // Nominal
+            
+            // Nominal input
             VStack(alignment: .leading, spacing: 6) {
               Text("Nominal")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
+              
               HStack(spacing: 8) {
                 Image(systemName: "dollarsign")
                   .foregroundStyle(.secondary)
+                
                 TextField("Masukkan nominal", text: $inputNominal)
                   .keyboardType(.decimalPad)
               }
               .padding(.vertical, 8)
+              
               Divider()
             }
-
+            
             // Kategori
             VStack(spacing: 10) {
               HStack {
@@ -74,7 +90,7 @@ struct TambahTransaksiView: View {
                 .tint(expense)
                 .pickerStyle(.menu)
               }
-
+              
               HStack {
                 Label("Masuk", systemImage: "arrow.down.circle.fill")
                   .foregroundStyle(income)
@@ -87,12 +103,16 @@ struct TambahTransaksiView: View {
                 .tint(income)
                 .pickerStyle(.menu)
               }
-
+              
               HStack {
-                Image(systemName: "calendar").foregroundStyle(.secondary)
+                Image(systemName: "calendar")
+                  .foregroundStyle(.secondary)
+                
                 Text(selectedDate, format: .dateTime.day().month(.abbreviated).year())
                   .foregroundStyle(.secondary)
+                
                 Spacer()
+                
                 Button {
                   withAnimation(.spring(duration: 0.50)) {
                     showCalendar.toggle()
@@ -105,7 +125,7 @@ struct TambahTransaksiView: View {
                 .buttonStyle(.plain)
               }
             }
-
+            
             if showCalendar {
               DatePicker("", selection: $selectedDate, displayedComponents: .date)
                 .datePickerStyle(.graphical)
@@ -113,38 +133,73 @@ struct TambahTransaksiView: View {
                 .padding(.top, 4)
                 .transition(.opacity.combined(with: .scale))
             }
-
-            // Actions
+            
+            // Aksi
             HStack(spacing: 10) {
+              
+              // PEMASUKAN
               Button {
                 if let nominal = Double(inputNominal) {
-                  financeData.tambahTransaksi(Transaksii(nominal: nominal, jenis: .masuk, kategori_Masuk: selectedKategori_Masuk, kategori_Keluar: selectedKategori_Keluar, tanggal: selectedDate))
-                  inputNominal = ""
-
                   
+                  let transaksiBaru = Transaksii(
+                    nominal: nominal,
+                    jenis: .masuk,
+                    kategori_Masuk: selectedKategori_Masuk,
+                    kategori_Keluar: selectedKategori_Keluar,
+                    tanggal: selectedDate
+                  )
+                  
+                  // Simpan ke local
+                  financeData.tambahTransaksi(transaksiBaru)
+                  
+                  // Simpan ke Firestore
+                  Task {
+                    try? await transaksiService.tambahTransaksi(transaksiBaru)
+                  }
+                  
+                  inputNominal = ""
                 }
               } label: {
-                HStack { Image(systemName: "arrow.down"); Text("Pemasukan") }
-                  .frame(maxWidth: .infinity)
+                HStack {
+                  Image(systemName: "arrow.down")
+                  Text("Pemasukan")
+                }
+                .frame(maxWidth: .infinity)
               }
               .buttonStyle(.borderedProminent)
               .tint(income)
-
+              
+              // PENGELUARAN
               Button {
                 if let nominal = Double(inputNominal) {
-                  financeData.tambahTransaksi(Transaksii(nominal: nominal, jenis: .keluar, kategori_Masuk: selectedKategori_Masuk, kategori_Keluar: selectedKategori_Keluar, tanggal: selectedDate))
+                  
+                  let transaksiBaru = Transaksii(
+                    nominal: nominal,
+                    jenis: .keluar,
+                    kategori_Masuk: selectedKategori_Masuk,
+                    kategori_Keluar: selectedKategori_Keluar,
+                    tanggal: selectedDate
+                  )
+                  
+                  financeData.tambahTransaksi(transaksiBaru)
+                  
+                  Task {
+                    try? await transaksiService.tambahTransaksi(transaksiBaru)
+                  }
+                  
                   inputNominal = ""
-
                 }
               } label: {
-                HStack { Image(systemName: "arrow.up"); Text("Pengeluaran") }
-                  .frame(maxWidth: .infinity)
+                HStack {
+                  Image(systemName: "arrow.up")
+                  Text("Pengeluaran")
+                }
+                .frame(maxWidth: .infinity)
               }
               .buttonStyle(.bordered)
               .tint(expense)
             }
           }
-
         }
         .padding()
       }
@@ -154,8 +209,6 @@ struct TambahTransaksiView: View {
     .toolbarBackground(.bar, for: .navigationBar)
     .toolbarBackground(.visible, for: .navigationBar)
     .toolbarColorScheme(.light, for: .navigationBar)
-    
-   
   }
 }
 

@@ -5,6 +5,7 @@ import Combine
 final class DataKeuangan: ObservableObject {
   @Published var trx: [Transaksii] = []
   
+  
   func hitungSaldo() -> Double {
     // ForEach untuk looping UI langsung di SwiftUI, pake protocol View
     // for loop untuk diluar urusan View
@@ -35,5 +36,6 @@ final class DataKeuangan: ObservableObject {
   
   func tambahTransaksi(_ trans: Transaksii) {
     trx.append(trans)
+    StreakManager.shared.checkInToday()
   }
 }
