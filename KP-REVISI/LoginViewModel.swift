@@ -8,31 +8,38 @@ import FirebaseAuth
 import Combine
 
 class LoginViewModel: ObservableObject {
-  
-  @Published var email = ""
-  @Published var password = ""
-  @Published var isLoading = false
-  @Published var isShowSuccess = false
-  @Published var isShowFailed = false
-  @Published var isLoggedIn = false
-  @AppStorage("isLoggedIn") var appStateLoggedIn: Bool = false
-  
-  func login() async throws {
-      let hasil = try await AuthenticationManager.shared.signInUser(email: email, password: password)
-      isLoading = true
-      print("Login UID:", hasil.uid)
-
-      await MainActor.run {
-          self.appStateLoggedIn = true
-          self.isLoggedIn = true
-          self.isShowSuccess = true
-      }
-  }
+    @Published var email = ""
+    @Published var password = ""
+    @Published var isLoading = false
+    @Published var isShowSuccess = false
+    @Published var isShowFailed = false
+    @Published var isLoggedIn = false
+    
+    @AppStorage("isLoggedIn") var appStateLoggedIn: Bool = false
+    @AppStorage("uid") var uid: String = ""   // ← WAJIB! BIAR UID TERSEDIA
+    
+    func login() async throws {
+        isLoading = true
+        let hasil = try await AuthenticationManager.shared.signInUser(email: email, password: password)
+        
+        print("Login UID:", hasil.uid)
+        
+        await MainActor.run {
+            self.uid = hasil.uid              // ← SIMPAN UID
+            self.appStateLoggedIn = true
+            self.isLoggedIn = true
+            self.isShowSuccess = true
+            self.isLoading = false
+        }
+    }
 }
+
 
 
 struct LoginView: View {
   @StateObject var vm = LoginViewModel()
+  @AppStorage("uid") var uid: String = ""
+  
   var body: some View {
     NavigationStack {
       VStack(spacing: 20) {

@@ -1,11 +1,10 @@
 import SwiftUI
 import FirebaseFirestore
 
-
 struct TambahTransaksiView: View {
   
-  
   let transaksiService = TransaksiService()
+  @AppStorage("uid") var uid: String = ""     // UID user yang login
   
   @State private var inputNominal: String = ""
   @State private var riwayat: [Transaksi] = []
@@ -58,7 +57,7 @@ struct TambahTransaksiView: View {
           // Input Card
           VStack(spacing: 12) {
             
-            // Nominal input
+            // NOMINAL
             VStack(alignment: .leading, spacing: 6) {
               Text("Nominal")
                 .font(.footnote)
@@ -76,7 +75,7 @@ struct TambahTransaksiView: View {
               Divider()
             }
             
-            // Kategori
+            // KATEGORI
             VStack(spacing: 10) {
               HStack {
                 Label("Keluar", systemImage: "arrow.up.circle.fill")
@@ -104,6 +103,7 @@ struct TambahTransaksiView: View {
                 .pickerStyle(.menu)
               }
               
+              // TANGGAL
               HStack {
                 Image(systemName: "calendar")
                   .foregroundStyle(.secondary)
@@ -114,7 +114,7 @@ struct TambahTransaksiView: View {
                 Spacer()
                 
                 Button {
-                  withAnimation(.spring(duration: 0.50)) {
+                  withAnimation(.spring(duration: 0.45)) {
                     showCalendar.toggle()
                   }
                 } label: {
@@ -127,46 +127,25 @@ struct TambahTransaksiView: View {
             }
             
             if showCalendar {
-              DatePicker("",selection: $selectedDate,
-              displayedComponents: .date)
-              .datePickerStyle(.graphical)
-              .tint(accent)
-              .padding(.top, 4)
-              .transition(.opacity.combined(with: .scale))
-              .onChange(of: selectedDate) { _ in
-                // Tutup kalender otomatis setelah memilih tanggal
-                withAnimation(.spring(duration: 0.35)) {
-                  showCalendar = false
+              DatePicker("", selection: $selectedDate, displayedComponents: .date)
+                .datePickerStyle(.graphical)
+                .tint(accent)
+                .padding(.top, 4)
+                .transition(.opacity.combined(with: .scale))
+                .onChange(of: selectedDate) { _ in
+                  // TUTUP KALENDER OTOMATIS
+                  withAnimation(.spring(duration: 0.35)) {
+                    showCalendar = false
+                  }
                 }
-              }
             }
             
-            
-            // Aksi
+            // BUTTON PEMASUKAN & PENGELUARAN
             HStack(spacing: 10) {
               
               // PEMASUKAN
               Button {
-                if let nominal = Double(inputNominal) {
-                  
-                  let transaksiBaru = Transaksi(
-                    nominal: nominal,
-                    jenis: .masuk,
-                    kategori_Masuk: selectedKategori_Masuk,
-                    kategori_Keluar: selectedKategori_Keluar,
-                    tanggal: selectedDate
-                  )
-                  
-                  // Simpan ke local
-                  financeData.tambahTransaksi(transaksiBaru)
-                  
-                  // Simpan ke Firestore
-                  Task {
-                    try? await transaksiService.tambahTransaksi(transaksiBaru)
-                  }
-                  
-                  inputNominal = ""
-                }
+                simpanTransaksi(jenis: .masuk)
               } label: {
                 HStack {
                   Image(systemName: "arrow.down")
@@ -179,24 +158,7 @@ struct TambahTransaksiView: View {
               
               // PENGELUARAN
               Button {
-                if let nominal = Double(inputNominal) {
-                  
-                  let transaksiBaru = Transaksi(
-                    nominal: nominal,
-                    jenis: .keluar,
-                    kategori_Masuk: selectedKategori_Masuk,
-                    kategori_Keluar: selectedKategori_Keluar,
-                    tanggal: selectedDate
-                  )
-                  
-                  financeData.tambahTransaksi(transaksiBaru)
-                  
-                  Task {
-                    try? await transaksiService.tambahTransaksi(transaksiBaru)
-                  }
-                  
-                  inputNominal = ""
-                }
+                simpanTransaksi(jenis: .keluar)
               } label: {
                 HStack {
                   Image(systemName: "arrow.up")
@@ -217,6 +179,39 @@ struct TambahTransaksiView: View {
     .toolbarBackground(.bar, for: .navigationBar)
     .toolbarBackground(.visible, for: .navigationBar)
     .toolbarColorScheme(.light, for: .navigationBar)
+  }
+  
+  // MARK: - FUNCTION SIMPAN TRANSAKSI
+  private func simpanTransaksi(jenis: JenisTransaksi) {
+    guard let nominal = Double(inputNominal) else { return }
+    
+    let transaksiBaru = Transaksi(
+      nominal: nominal,
+      jenis: jenis,
+      kategori_Masuk: selectedKategori_Masuk,
+      kategori_Keluar: selectedKategori_Keluar,
+      tanggal: selectedDate
+    )
+    
+    // Simpan ke lokal (EnvironmentObject)
+    financeData.tambahTransaksi(transaksiBaru)
+    
+    // Simpan ke FIRESTORE per-UID
+    Task {
+      if uid.isEmpty {
+        // UID kosong -> user belum login atau belum tersimpan di AppStorage
+        print("Warning: UID kosong — pastikan user sudah login sebelum menyimpan transaksi.")
+        return
+      }
+      
+      do {
+        try await transaksiService.tambahTransaksi(transaksiBaru, uid: uid) // <-- kirim uid di sini
+      } catch {
+        print("Gagal simpan transaksi ke Firestore:", error)
+      }
+    }
+    
+    inputNominal = ""
   }
 }
 

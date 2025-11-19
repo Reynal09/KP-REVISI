@@ -1,71 +1,90 @@
 import SwiftUI
+import SwiftUI
 import Charts
 import Combine
 
-// ==============================
-// MARK: - CONTENT VIEW
-// ==============================
 struct ContentView: View {
-  @State var selectedOption = "Pemasukan"
-  @EnvironmentObject var financeData: DataKeuangan
-  
-  @AppStorage("isLoggedIn") var isLoggedIn: Bool = false
-  @State private var showLogoutConfirmation = false
-  
-  var body: some View {
-    NavigationStack {
-      VStack(spacing: 20) {
-        VStack(alignment: .leading) {
-          Text("Saldo Saat Ini")
-            .font(.headline)
-            .foregroundStyle(.secondary)
-          Text(financeData.hitungSaldo(), format: .currency(code: "IDR"))
-            .font(.largeTitle)
-            .fontWeight(.bold)
+    @State var selectedOption = "Pemasukan"
+    @EnvironmentObject var financeData: DataKeuangan
+    
+    @StateObject var loginVM = LoginViewModel()
+    
+    @AppStorage("isLoggedIn") var isLoggedIn: Bool = false
+    @AppStorage("uid") var uid: String = ""
+    @State private var showLogoutConfirmation = false
+    
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 20) {
+                
+                // SALDO
+                VStack(alignment: .leading) {
+                    Text("Saldo Saat Ini")
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
+                    
+                    Text(financeData.hitungSaldo(), format: .currency(code: "IDR"))
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.blue.opacity(0.15))
+                .cornerRadius(16)
+                .padding(.horizontal)
+                
+                // PICKER
+                Picker("Pilih tampilan", selection: $selectedOption) {
+                    Text("Pemasukan").tag("Pemasukan")
+                    Text("Pengeluaran").tag("Pengeluaran")
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal)
+                
+                // VIEW
+                if selectedOption == "Pemasukan" {
+                    PemasukanView()
+                } else {
+                    PengeluaranView()
+                }
+                
+                Spacer()
+                
+                StreakView()
+                    .padding()
+            }
+            .navigationTitle("Keuangan")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Logout") {
+                        showLogoutConfirmation = true
+                    }
+                }
+            }
+            .alert("Keluar dari akun?", isPresented: $showLogoutConfirmation) {
+                Button("Iya", role: .destructive) {
+                    isLoggedIn = false
+                }
+                Button("Batal", role: .cancel) {}
+            }
+            // ========= AMBIL DATA FIRESTORE =========
+            .task {
+                
+                let finalUID = loginVM.uid.isEmpty ? uid : loginVM.uid
+                
+                if !finalUID.isEmpty {
+                    let data = try? await TransaksiService().ambilTransaksiUser(uid: finalUID)
+                    
+                    await MainActor.run {
+                      financeData.trx = data ?? []
+                    }
+                }
+            }
         }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.blue.opacity(0.15))
-        .cornerRadius(16)
-        .padding(.horizontal)
-        
-        Picker("Pilih tampilan", selection: $selectedOption) {
-          Text("Pemasukan").tag("Pemasukan")
-          Text("Pengeluaran").tag("Pengeluaran")
-        }
-        .pickerStyle(.segmented)
-        .padding(.horizontal)
-        
-        if selectedOption == "Pemasukan" {
-          PemasukanView()
-        } else {
-          PengeluaranView()
-        }
-        
-        Spacer()
-        
-        StreakView()
-          .padding()
-      }
-      .navigationTitle("Keuangan")
-      .navigationBarTitleDisplayMode(.inline)
-      .toolbar {
-        ToolbarItem(placement: .topBarTrailing) {
-          Button("Logout") {
-            showLogoutConfirmation = true
-          }
-        }
-      }
-      
-      .alert("Keluar dari akun?", isPresented: $showLogoutConfirmation) {
-        Button("Iya", role: .destructive) {
-          isLoggedIn = false
-        }
-        Button("Batal", role: .cancel) {}
-      }
     }
-  }
 }
+
 
 
 

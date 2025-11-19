@@ -1,9 +1,9 @@
 import FirebaseFirestore
+import FirebaseAuth
 
 class TransaksiService {
     private let db = Firestore.firestore()
 
-    // Convert Transaksii → Dictionary
     private func toDictionary(_ transaksi: Transaksi) -> [String: Any] {
         return [
             "id": transaksi.id,
@@ -15,49 +15,35 @@ class TransaksiService {
         ]
     }
 
-    // Convert Firestore Document → Transaksii
-    private func fromDocument(_ document: DocumentSnapshot) -> Transaksi? {
-        guard let data = document.data() else { return nil }
-
-        guard
-            let nominal = data["nominal"] as? Double,
-            let jenisString = data["jenis"] as? String,
-            let jenis = JenisTransaksi(rawValue: jenisString),
-            let kategori_Masuk = data["kategori_Masuk"] as? String,
-            let kategori_Keluar = data["kategori_Keluar"] as? String,
-            let timestamp = data["tanggal"] as? Timestamp
-        else {
-            return nil
-        }
-
-        let id = data["id"] as? String ?? document.documentID
-
-        return Transaksi(
-            id: id,
-            nominal: nominal,
-            jenis: jenis,
-            kategori_Masuk: kategori_Masuk,
-            kategori_Keluar: kategori_Keluar,
-            tanggal: timestamp.dateValue()
-        )
-    }
-
-    // Tambah transaksi ke Firestore
-    func tambahTransaksi(_ transaksi: Transaksi) async throws {
+    // SIMPAN TRANSAKSI PER USER
+    func tambahTransaksi(_ transaksi: Transaksi, uid: String) async throws {
+        guard !uid.isEmpty else { return } // atau throw error
         let data = toDictionary(transaksi)
-        try await db.collection("transaksi")
+        try await db.collection("user")
+            .document(uid)
+            .collection("transaksi")
             .document(transaksi.id)
             .setData(data)
     }
 
-    // Ambil semua transaksi
-    func ambilSemuaTransaksi() async throws -> [Transaksi] {
-        let snapshot = try await db.collection("transaksi").getDocuments()
-        return snapshot.documents.compactMap { fromDocument($0) }
-    }
-
-    // Hapus transaksi
-    func hapusTransaksi(id: String) async throws {
-        try await db.collection("transaksi").document(id).delete()
+    // AMBIL TRANSAKSI USER
+    func ambilTransaksiUser(uid: String) async throws -> [Transaksi] {
+        guard !uid.isEmpty else { return [] }
+        let snapshot = try await db.collection("user")
+            .document(uid)
+            .collection("transaksi")
+            .order(by: "tanggal", descending: true)
+            .getDocuments()
+        return snapshot.documents.compactMap { doc -> Transaksi? in
+            let data = doc.data()
+            return Transaksi(
+                id: data["id"] as? String ?? doc.documentID,
+                nominal: data["nominal"] as? Double ?? 0,
+                jenis: JenisTransaksi(rawValue: data["jenis"] as? String ?? "") ?? .masuk,
+                kategori_Masuk: data["kategori_Masuk"] as? String ?? "",
+                kategori_Keluar: data["kategori_Keluar"] as? String ?? "",
+                tanggal: (data["tanggal"] as? Timestamp)?.dateValue() ?? Date()
+            )
+        }
     }
 }
