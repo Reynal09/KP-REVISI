@@ -35,7 +35,7 @@ struct PemasukanView: View {
   }
   
   // ✅ Riwayat disortir sesuai filter
-  private var sortedTransactions: [Transaksii] {
+  private var sortedTransactions: [Transaksi] {
     let filtered = financeData.trx.filter { $0.jenis == .masuk }
     return sortOrder == .terbaru
     ? filtered.sorted(by: { $0.tanggal > $1.tanggal })

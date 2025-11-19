@@ -9,7 +9,7 @@ enum JenisTransaksi: String, Codable {
     case piutang
 }
 
-struct Transaksii: Codable, Hashable, Identifiable {
+struct Transaksi: Codable, Hashable, Identifiable {
     var id: String
     var nominal: Double
     var jenis: JenisTransaksi

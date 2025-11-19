@@ -14,36 +14,21 @@ struct KP_REVISIApp: App {
   
   @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
   @StateObject var dataKeuangan = DataKeuangan()
-  
-  // Menyimpan status login secara permanen
+
   @AppStorage("isLoggedIn") var isLoggedIn: Bool = false
   
   @State private var selectedTab = 0
   @State private var isTambahTransaksi = false
-  
+   
   var body: some Scene {
     WindowGroup {
       
-      // ===========================
-      // Jika belum login → ke HomeView
-      // ===========================
       if !isLoggedIn {
         VStack {
           HomeView()
             .environmentObject(dataKeuangan)
-          
-          // ❗ Tombol reset sementara (hilangkan setelah selesai testing)
-          Button("Reset Status Login") {
-            isLoggedIn = false
-          }
-          .padding(.top, 20)
-          .foregroundColor(.red)
         }
       }
-      
-      // ===========================
-      // Jika sudah login → buka TabView
-      // ===========================
       else {
         TabView(selection: $selectedTab) {
           

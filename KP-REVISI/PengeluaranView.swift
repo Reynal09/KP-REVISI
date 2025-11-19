@@ -36,7 +36,7 @@ struct PengeluaranView: View {
     }.sorted { $0.amount > $1.amount }
   }
   
-  private var sortedTransactions: [Transaksii] {
+  private var sortedTransactions: [Transaksi] {
     let filtered = financeData.trx.filter { $0.jenis == .keluar }
     return sortOrder == .terbaru
     ? filtered.sorted(by: { $0.tanggal > $1.tanggal })

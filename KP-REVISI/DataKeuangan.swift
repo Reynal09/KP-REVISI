@@ -2,9 +2,13 @@ import Foundation
 import SwiftUI
 import Combine
 
+enum Page {
+ case home,login
+}
+
 final class DataKeuangan: ObservableObject {
-  @Published var trx: [Transaksii] = []
-  
+  @Published var trx: [Transaksi] = []
+  @Published var currentPage: Page = .home
   
   func hitungSaldo() -> Double {
     // ForEach untuk looping UI langsung di SwiftUI, pake protocol View
@@ -34,7 +38,7 @@ final class DataKeuangan: ObservableObject {
 //  }
   
   
-  func tambahTransaksi(_ trans: Transaksii) {
+  func tambahTransaksi(_ trans: Transaksi) {
     trx.append(trans)
     StreakManager.shared.checkInToday()
   }

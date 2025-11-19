@@ -4,11 +4,11 @@ import FirebaseFirestore
 
 struct TambahTransaksiView: View {
   
-  // ⬅️ Tambahkan service Firestore
+  
   let transaksiService = TransaksiService()
   
   @State private var inputNominal: String = ""
-  @State private var riwayat: [Transaksii] = []
+  @State private var riwayat: [Transaksi] = []
   @State private var selectedKategori_Keluar: String = "Makanan"
   @State private var selectedKategori_Masuk: String = "Investasi"
   @State private var selectedDate: Date = Date()
@@ -127,12 +127,20 @@ struct TambahTransaksiView: View {
             }
             
             if showCalendar {
-              DatePicker("", selection: $selectedDate, displayedComponents: .date)
-                .datePickerStyle(.graphical)
-                .tint(accent)
-                .padding(.top, 4)
-                .transition(.opacity.combined(with: .scale))
+              DatePicker("",selection: $selectedDate,
+              displayedComponents: .date)
+              .datePickerStyle(.graphical)
+              .tint(accent)
+              .padding(.top, 4)
+              .transition(.opacity.combined(with: .scale))
+              .onChange(of: selectedDate) { _ in
+                // Tutup kalender otomatis setelah memilih tanggal
+                withAnimation(.spring(duration: 0.35)) {
+                  showCalendar = false
+                }
+              }
             }
+            
             
             // Aksi
             HStack(spacing: 10) {
@@ -141,7 +149,7 @@ struct TambahTransaksiView: View {
               Button {
                 if let nominal = Double(inputNominal) {
                   
-                  let transaksiBaru = Transaksii(
+                  let transaksiBaru = Transaksi(
                     nominal: nominal,
                     jenis: .masuk,
                     kategori_Masuk: selectedKategori_Masuk,
@@ -173,7 +181,7 @@ struct TambahTransaksiView: View {
               Button {
                 if let nominal = Double(inputNominal) {
                   
-                  let transaksiBaru = Transaksii(
+                  let transaksiBaru = Transaksi(
                     nominal: nominal,
                     jenis: .keluar,
                     kategori_Masuk: selectedKategori_Masuk,

@@ -16,14 +16,14 @@ class RegisterViewModel: ObservableObject {
   @Published var isShowSucses = false
   @Published var isShowFailed = false
   func register() {
-    Task { // async - await
-      do { // try - throws
-        let hasil = try await AuthenticationManager.shared.createUser(email: self.email, password: self.password)
-        print("SUKSES BUAT AKUN!")
+    Task {
+      do {
+        let user = try await AuthenticationManager.shared.createUser(email: email, password: password)
+        
+        print("Register UID:", user.uid)
         isShowSucses = true
         isRegistering = false
       } catch {
-        print("GAGAL BUAT AKUN:", error)
         isShowFailed = true
         isRegistering = false
       }

@@ -8,7 +8,7 @@ import Combine
 struct ContentView: View {
   @State var selectedOption = "Pemasukan"
   @EnvironmentObject var financeData: DataKeuangan
-
+  
   @AppStorage("isLoggedIn") var isLoggedIn: Bool = false
   @State private var showLogoutConfirmation = false
   
@@ -67,9 +67,7 @@ struct ContentView: View {
   }
 }
 
-/////////////////////////////////////////////////////////////
-// ======================= STREAK VIEW =====================
-/////////////////////////////////////////////////////////////
+
 
 struct StreakView: View {
   @State private var streak: Int = StreakManager.shared.currentStreak()
@@ -90,10 +88,12 @@ struct StreakView: View {
         VStack(alignment: .leading) {
           Text("🔥 \(streak)")
             .font(.headline)
+          
           Text("Streak Harian")
             .font(.subheadline)
             .foregroundStyle(.secondary)
         }
+        
         Spacer()
       }
       .padding()
@@ -105,12 +105,15 @@ struct StreakView: View {
     }
   }
   
+  // MARK: - AUTO CHECK-IN
   private func autoCheckIn() {
     if !StreakManager.shared.hasCheckedInToday() {
       let result = StreakManager.shared.checkInToday()
+      
       self.streak = result.newStreak
       self.fireActive = StreakManager.shared.isFireActive()
       
+      // Animasi flame
       self.animateFlame = true
       DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
         self.animateFlame = false
@@ -118,10 +121,6 @@ struct StreakView: View {
     }
   }
 }
-
-/////////////////////////////////////////////////////////////
-// ======================= STREAK MANAGER ==================
-/////////////////////////////////////////////////////////////
 
 final class StreakManager {
   static let shared = StreakManager()
@@ -135,11 +134,13 @@ final class StreakManager {
   
   private init() {}
   
+  // Cek apakah user sudah check-in hari ini
   func hasCheckedInToday() -> Bool {
     guard let last = defaults.object(forKey: lastCheckInKey) as? Date else { return false }
     return calendar.isDateInToday(last)
   }
   
+  // Ambil streak saat ini, termasuk reset otomatis jika lewat sehari
   func currentStreak() -> Int {
     let count = defaults.integer(forKey: streakCountKey)
     
@@ -151,13 +152,16 @@ final class StreakManager {
         return 0
       }
     }
+    
     return count
   }
   
+  // Status flame aktif (>=3 hari streak)
   func isFireActive() -> Bool {
     return defaults.bool(forKey: fireActiveKey)
   }
   
+  // MARK: - CHECK-IN FUNCTION
   @discardableResult
   func checkInToday() -> (newStreak: Int, date: Date) {
     
@@ -167,22 +171,27 @@ final class StreakManager {
     if let last = defaults.object(forKey: lastCheckInKey) as? Date {
       
       if calendar.isDateInToday(last) {
+        // Sudah check-in hari ini
         newStreak = defaults.integer(forKey: streakCountKey)
         
       } else if let yesterday = calendar.date(byAdding: .day, value: -1, to: today),
                 calendar.isDate(last, inSameDayAs: yesterday) {
         
+        // Check-in berurutan → tambah streak
         newStreak = defaults.integer(forKey: streakCountKey) + 1
         
       } else {
+        // Streak putus → reset
         newStreak = 1
         defaults.set(false, forKey: fireActiveKey)
       }
     }
     
+    // Simpan perubahan
     defaults.set(today, forKey: lastCheckInKey)
     defaults.set(newStreak, forKey: streakCountKey)
     
+    // Aktifkan api jika streak >= 3
     if newStreak >= 3 {
       defaults.set(true, forKey: fireActiveKey)
     }

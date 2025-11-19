@@ -4,7 +4,7 @@ class TransaksiService {
     private let db = Firestore.firestore()
 
     // Convert Transaksii → Dictionary
-    private func toDictionary(_ transaksi: Transaksii) -> [String: Any] {
+    private func toDictionary(_ transaksi: Transaksi) -> [String: Any] {
         return [
             "id": transaksi.id,
             "nominal": transaksi.nominal,
@@ -16,7 +16,7 @@ class TransaksiService {
     }
 
     // Convert Firestore Document → Transaksii
-    private func fromDocument(_ document: DocumentSnapshot) -> Transaksii? {
+    private func fromDocument(_ document: DocumentSnapshot) -> Transaksi? {
         guard let data = document.data() else { return nil }
 
         guard
@@ -32,7 +32,7 @@ class TransaksiService {
 
         let id = data["id"] as? String ?? document.documentID
 
-        return Transaksii(
+        return Transaksi(
             id: id,
             nominal: nominal,
             jenis: jenis,
@@ -43,7 +43,7 @@ class TransaksiService {
     }
 
     // Tambah transaksi ke Firestore
-    func tambahTransaksi(_ transaksi: Transaksii) async throws {
+    func tambahTransaksi(_ transaksi: Transaksi) async throws {
         let data = toDictionary(transaksi)
         try await db.collection("transaksi")
             .document(transaksi.id)
@@ -51,7 +51,7 @@ class TransaksiService {
     }
 
     // Ambil semua transaksi
-    func ambilSemuaTransaksi() async throws -> [Transaksii] {
+    func ambilSemuaTransaksi() async throws -> [Transaksi] {
         let snapshot = try await db.collection("transaksi").getDocuments()
         return snapshot.documents.compactMap { fromDocument($0) }
     }
