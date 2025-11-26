@@ -17,6 +17,7 @@ struct Transaksi: Codable, Hashable, Identifiable {
     var kategori_Keluar: String
     var tanggal: Date
 
+
     init(
         id: String = UUID().uuidString,
         nominal: Double,

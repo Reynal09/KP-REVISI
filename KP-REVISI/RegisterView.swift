@@ -12,13 +12,14 @@ import Combine
 class RegisterViewModel: ObservableObject {
   @Published var email = ""
   @Published var password = ""
+  @Published var username = ""
   @Published var isRegistering = false
   @Published var isShowSucses = false
   @Published var isShowFailed = false
   func register() {
     Task {
       do {
-        let user = try await AuthenticationManager.shared.createUser(email: email, password: password)
+        let user = try await AuthenticationManager.shared.createUser(email: email, password: password, username: username)
         
         print("Register UID:", user.uid)
         isShowSucses = true
@@ -37,6 +38,7 @@ struct RegisterView: View {
   var body: some View {
     NavigationStack {
       List {
+        TextField("Username", text: $vm.username)
         TextField("Email", text: $vm.email)
         SecureField("Password", text: $vm.password)
         Button {

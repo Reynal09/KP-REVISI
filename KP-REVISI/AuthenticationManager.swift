@@ -7,7 +7,7 @@ class AuthenticationManager {
   static let shared = AuthenticationManager() // Singleton
   
   // REGISTER USER BARU
-  func createUser(email: String, password: String) async throws -> FSUserModel {
+  func createUser(email: String, password: String, username: String) async throws -> FSUserModel {
     
     // Buat akun di Firebase Auth
     let result = try await Auth.auth().createUser(withEmail: email, password: password)
@@ -16,7 +16,8 @@ class AuthenticationManager {
     // Simpan user ke Firestore
     let data: [String: Any] = [
       "id": authUser.uid,
-      "email": authUser.email ?? ""
+      "email": authUser.email ?? "",
+      "username": username ?? ""
     ]
     
     try await Firestore.firestore()
@@ -25,7 +26,7 @@ class AuthenticationManager {
       .setData(data, merge: false)
     
     // RETURN KE LOGIN VIEWMODEL
-    return FSUserModel(uid: authUser.uid, email: authUser.email ?? "")
+    return FSUserModel(uid: authUser.uid, email: authUser.email ?? "", username: username ?? "")
   }
   
   // LOGIN USER
@@ -40,12 +41,12 @@ class AuthenticationManager {
       .getDocument()
     
     guard let data = snapshot.data() else {
-      return FSUserModel(uid: "", email: "")
+      return FSUserModel(uid: "", email: "", username: "")
     }
     
     let id = data["id"] as? String ?? ""
     let email = data["email"] as? String ?? ""
-    
-    return FSUserModel(uid: id, email: email)
+    let username = data["username"] as? String ?? ""
+    return FSUserModel(uid: id, email: email, username: username)
   }
 }

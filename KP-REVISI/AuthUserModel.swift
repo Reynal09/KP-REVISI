@@ -15,17 +15,19 @@ struct AuthUserModel {
   init(user: User) {
     self.uid = user.uid
     self.email = user.email
+    
   }
 }
 
 struct FSUserModel {
   let uid: String
   let email: String?
-
+  let username : String?
   
-  init(uid: String, email: String?) {
+  init(uid: String, email: String?, username: String?) {
     self.uid = uid
     self.email = email
+    self.username = username
 
   }
 }
