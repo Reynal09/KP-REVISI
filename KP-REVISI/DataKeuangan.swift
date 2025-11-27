@@ -40,6 +40,7 @@ final class DataKeuangan: ObservableObject {
   
   func tambahTransaksi(_ trans: Transaksi) {
     trx.append(trans)
-    StreakManager.shared.checkInToday()
+    StreakManager.shared.checkInToday { _ in }
   }
 }
+

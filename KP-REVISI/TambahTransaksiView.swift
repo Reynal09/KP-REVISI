@@ -1,5 +1,8 @@
 import SwiftUI
+import Combine
 import FirebaseFirestore
+import FirebaseAuth
+
 
 struct TambahTransaksiView: View {
   
@@ -257,142 +260,220 @@ struct TambahTransaksiView: View {
   }
 }
 
-// MARK: - Mini Game View
-private struct MiniGameView: View {
-  @State private var score: Int = 0
-  @State private var timeLeft: Int = 10
-  @State private var isPlaying: Bool = false
-  @State private var targetOffset: CGSize = .zero
-  @State private var showResult: Bool = false
-  @State private var bestScore: Int = UserDefaults.standard.integer(forKey: "MiniGameBestScore")
+// MARK: - Firestore Service
+class MiniGameService {
+    private let db = Firestore.firestore()
 
-  private let generator = UIImpactFeedbackGenerator(style: .light)
+    private var userID: String {
+        Auth.auth().currentUser?.uid ?? ""
+    }
 
-  var body: some View {
-    VStack(spacing: 12) {
-      HStack {
-        Label("Skor: \(score)", systemImage: "star.fill").foregroundStyle(.yellow)
-        Spacer()
-        Label("Waktu: \(timeLeft)s", systemImage: "clock").foregroundStyle(.secondary)
-      }
-      .font(.subheadline)
+    // Ambil skor terbaik
+    func fetchHighScore(completion: @escaping (Int) -> Void) {
+        let docRef = db.collection("user")
+            .document(userID)
+            .collection("MiniGame")
+            .document("Highscore")
 
-      ZStack {
-        RoundedRectangle(cornerRadius: 12, style: .continuous)
-          .fill(Color(.tertiarySystemBackground))
-          .frame(height: 160)
-
-        if isPlaying {
-          Button(action: hitTarget) {
-            Image(systemName: "target")
-              .font(.system(size: 28, weight: .bold))
-              .foregroundStyle(.pink)
-              .padding(18)
-              .background(Circle().fill(Color(.systemBackground)))
-              .shadow(radius: 4)
-          }
-          .offset(targetOffset)
-          .animation(.spring(response: 0.35, dampingFraction: 0.8), value: targetOffset)
-          .accessibilityLabel("Ketuk target untuk mendapat poin")
-        } else {
-          VStack(spacing: 8) {
-            if showResult {
-              Text("Waktu Habis!")
-                .font(.headline)
-              Text("Skor: \(score)  •  Rekor: \(bestScore)")
-                .foregroundStyle(.secondary)
+        docRef.getDocument { snapshot, error in
+            if let data = snapshot?.data(),
+               let best = data["bestScore"] as? Int {
+                completion(best)
             } else {
-              Text("Tap Target!")
-                .font(.headline)
-              Text("Ketuk target sebanyak mungkin dalam 10 detik.")
-                .foregroundStyle(.secondary)
+                completion(0)
             }
-            Button(action: startGame) {
-              Label(showResult ? "Main Lagi" : "Mulai", systemImage: "play.fill")
-                .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-          }
-          .padding()
         }
-      }
-
-      if bestScore > 0 {
-        HStack {
-          Image(systemName: "trophy.fill").foregroundStyle(.orange)
-          Text("Rekor terbaik: \(bestScore)")
-          Spacer()
-          Button(role: .destructive) { resetBest() } label: {
-            Label("Reset", systemImage: "arrow.counterclockwise")
-          }
-          .labelStyle(.iconOnly)
-        }
-        .font(.footnote)
-        .transition(.opacity)
-      }
     }
-    .onAppear { generator.prepare() }
-  }
 
-  // MARK: - Actions
-  private func startGame() {
-    score = 0
-    timeLeft = 10
-    showResult = false
-    isPlaying = true
-    moveTarget(within: 140)
+    // Simpan skor terbaik
+    func saveHighScore(_ score: Int) {
+        let docRef = db.collection("user")
+            .document(userID)
+            .collection("MiniGame")
+            .document("Highscore")
 
-    generator.impactOccurred(intensity: 0.8)
-
-    // Timer sederhana menggunakan DispatchQueue
-    DispatchQueue.main.async {
-      tick()
+        docRef.setData([
+            "bestScore": score,
+            "updatedAt": FieldValue.serverTimestamp()
+        ], merge: true)
     }
-  }
-
-  private func tick() {
-    guard isPlaying else { return }
-    if timeLeft > 0 {
-      DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-        timeLeft -= 1
-        tick()
-      }
-    } else {
-      endGame()
-    }
-  }
-
-  private func endGame() {
-    isPlaying = false
-    showResult = true
-    if score > bestScore {
-      bestScore = score
-      UserDefaults.standard.set(bestScore, forKey: "MiniGameBestScore")
-    }
-  }
-
-  private func hitTarget() {
-    guard isPlaying else { return }
-    score += 1
-    generator.impactOccurred(intensity: 0.6)
-    moveTarget(within: 140)
-  }
-
-  private func moveTarget(within radius: CGFloat) {
-    let dx = CGFloat.random(in: -radius...radius)
-    let dy = CGFloat.random(in: -radius...radius)
-    withAnimation {
-      targetOffset = CGSize(width: dx, height: dy)
-    }
-  }
-
-  private func resetBest() {
-    bestScore = 0
-    UserDefaults.standard.removeObject(forKey: "MiniGameBestScore")
-  }
 }
 
+
+
+// MARK: - ViewModel MiniGame
+class MiniGameViewModel: ObservableObject {
+  
+    @Published var bestScore: Int = 0
+
+    private lazy var service = MiniGameService()
+
+    init() {
+        loadHighScore()
+    }
+
+    func loadHighScore() {
+        service.fetchHighScore { [weak self] score in
+            DispatchQueue.main.async {
+                self?.bestScore = score
+            }
+        }
+    }
+
+    func updateBestScoreIfNeeded(newScore: Int) {
+        if newScore > bestScore {
+            bestScore = newScore
+            service.saveHighScore(newScore)
+        }
+    }
+
+    func resetHighScore() {
+        bestScore = 0
+        service.saveHighScore(0)
+    }
+}
+
+
+
+// MARK: - Mini Game View
+struct MiniGameView: View {
+    @StateObject private var vm = MiniGameViewModel()
+
+    @State private var score: Int = 0
+    @State private var timeLeft: Int = 10
+    @State private var isPlaying: Bool = false
+    @State private var targetOffset: CGSize = .zero
+    @State private var showResult: Bool = false
+
+    private let generator = UIImpactFeedbackGenerator(style: .light)
+
+    
+    var body: some View {
+        VStack(spacing: 12) {
+            // Header skor & waktu
+            HStack {
+                Label("Skor: \(score)", systemImage: "star.fill")
+                    .foregroundStyle(.yellow)
+                Spacer()
+                Label("Waktu: \(timeLeft)s", systemImage: "clock")
+                    .foregroundStyle(.secondary)
+            }
+            .font(.subheadline)
+
+            // Arena Mini Game
+            ZStack {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color(.tertiarySystemBackground))
+                    .frame(height: 160)
+
+                if isPlaying {
+                    Button(action: hitTarget) {
+                        Image(systemName: "target")
+                            .font(.system(size: 28, weight: .bold))
+                            .foregroundStyle(.pink)
+                            .padding(18)
+                            .background(Circle().fill(Color(.systemBackground)))
+                            .shadow(radius: 4)
+                    }
+                    .offset(targetOffset)
+                    .animation(.spring(response: 0.35, dampingFraction: 0.8), value: targetOffset)
+                } else {
+                    VStack(spacing: 8) {
+                        if showResult {
+                            Text("Waktu Habis!")
+                                .font(.headline)
+                            Text("Skor: \(score)  •  Rekor: \(vm.bestScore)")
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text("Tap Target!")
+                                .font(.headline)
+                            Text("Ketuk target sebanyak mungkin dalam 10 detik.")
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Button(action: startGame) {
+                            Label(showResult ? "Main Lagi" : "Mulai", systemImage: "play.fill")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                    .padding()
+                }
+            }
+
+            // Rekor terbaik
+            if vm.bestScore > 0 {
+                HStack {
+                    Image(systemName: "trophy.fill").foregroundStyle(.orange)
+                    Text("Rekor terbaik: \(vm.bestScore)")
+                    Spacer()
+                    Button(role: .destructive) { vm.resetHighScore() } label: {
+                        Label("Reset", systemImage: "arrow.counterclockwise")
+                    }
+                    .labelStyle(.iconOnly)
+                }
+                .font(.footnote)
+                .transition(.opacity)
+            }
+        }
+        .onAppear { generator.prepare() }
+    }
+
+
+    // MARK: - Game Logic
+
+    private func startGame() {
+        score = 0
+        timeLeft = 10
+        showResult = false
+        isPlaying = true
+        moveTarget(within: 140)
+
+        generator.impactOccurred(intensity: 0.8)
+
+        DispatchQueue.main.async {
+            tick()
+        }
+    }
+
+    private func tick() {
+        guard isPlaying else { return }
+        if timeLeft > 0 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                timeLeft -= 1
+                tick()
+            }
+        } else {
+            endGame()
+        }
+    }
+
+    private func endGame() {
+        isPlaying = false
+        showResult = true
+        vm.updateBestScoreIfNeeded(newScore: score)
+    }
+
+    private func hitTarget() {
+        guard isPlaying else { return }
+        score += 1
+        generator.impactOccurred(intensity: 0.6)
+        moveTarget(within: 140)
+    }
+
+    private func moveTarget(within radius: CGFloat) {
+        let dx = CGFloat.random(in: -radius...radius)
+        let dy = CGFloat.random(in: -radius...radius)
+        withAnimation {
+            targetOffset = CGSize(width: dx, height: dy)
+        }
+    }
+}
+
+
+
+// MARK: - Preview
 #Preview {
-  TambahTransaksiView()
-    .environmentObject(DataKeuangan())
+    MiniGameView()
 }
+

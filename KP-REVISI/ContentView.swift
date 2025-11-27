@@ -1,6 +1,8 @@
 import SwiftUI
 import Charts
 import Combine
+import FirebaseFirestore
+import FirebaseAuth
 
 fileprivate struct AccountsStore {
   static let key = "accounts_list"
@@ -278,9 +280,9 @@ struct UserProfileView: View {
 }
 
 struct StreakView: View {
-  @State private var streak: Int = StreakManager.shared.currentStreak()
-  @State private var fireActive: Bool = StreakManager.shared.isFireActive()
-  @State private var hasCheckedInToday: Bool = StreakManager.shared.hasCheckedInToday()
+  @State private var streak: Int = 0
+  @State private var fireActive: Bool = false
+  @State private var hasCheckedInToday: Bool = false
   @State private var animateFlame: Bool = false
   
   var body: some View {
@@ -309,103 +311,94 @@ struct StreakView: View {
       .clipShape(RoundedRectangle(cornerRadius: 16))
     }
     .onAppear {
-      autoCheckIn()
-    }
-  }
-  
-  // MARK: - AUTO CHECK-IN
-  private func autoCheckIn() {
-    if !StreakManager.shared.hasCheckedInToday() {
-      let result = StreakManager.shared.checkInToday()
-      
-      self.streak = result.newStreak
-      self.fireActive = StreakManager.shared.isFireActive()
-      
-      // Animasi flame
-      self.animateFlame = true
-      DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-        self.animateFlame = false
+      StreakManager.shared.checkInToday { newStreak in
+        self.streak = newStreak
+        self.fireActive = newStreak >= 3
+        
+        self.animateFlame = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+          self.animateFlame = false
+        }
       }
     }
+    
   }
 }
 
 final class StreakManager {
-  static let shared = StreakManager()
-  
-  private let lastCheckInKey = "streak_last_checkin_date"
-  private let streakCountKey = "streak_count"
-  private let fireActiveKey = "fire_is_active"
-  
-  private let calendar = Calendar.current
-  private let defaults = UserDefaults.standard
-  
-  private init() {}
-  
-  // Cek apakah user sudah check-in hari ini
-  func hasCheckedInToday() -> Bool {
-    guard let last = defaults.object(forKey: lastCheckInKey) as? Date else { return false }
-    return calendar.isDateInToday(last)
-  }
-  
-  // Ambil streak saat ini, termasuk reset otomatis jika lewat sehari
-  func currentStreak() -> Int {
-    let count = defaults.integer(forKey: streakCountKey)
-    
-    if let last = defaults.object(forKey: lastCheckInKey) as? Date,
-       !calendar.isDateInToday(last) {
-      
-      if let yesterday = calendar.date(byAdding: .day, value: -1, to: Date()),
-         !calendar.isDate(last, inSameDayAs: yesterday) {
-        return 0
-      }
+    static let shared = StreakManager()
+
+    private let db = Firestore.firestore()
+    private let calendar = Calendar.current
+
+    private init() {}
+
+    private func streakDoc() -> DocumentReference? {
+        guard let uid = Auth.auth().currentUser?.uid else { return nil }
+        return db.collection("user")
+            .document(uid)
+            .collection("Streak")
+            .document("Daily")
     }
-    
-    return count
-  }
-  
-  // Status flame aktif (>=3 hari streak)
-  func isFireActive() -> Bool {
-    return defaults.bool(forKey: fireActiveKey)
-  }
-  
-  // MARK: - CHECK-IN FUNCTION
-  @discardableResult
-  func checkInToday() -> (newStreak: Int, date: Date) {
-    
-    let today = Date()
-    var newStreak = 1
-    
-    if let last = defaults.object(forKey: lastCheckInKey) as? Date {
-      
-      if calendar.isDateInToday(last) {
-        // Sudah check-in hari ini
-        newStreak = defaults.integer(forKey: streakCountKey)
-        
-      } else if let yesterday = calendar.date(byAdding: .day, value: -1, to: today),
-                calendar.isDate(last, inSameDayAs: yesterday) {
-        
-        // Check-in berurutan → tambah streak
-        newStreak = defaults.integer(forKey: streakCountKey) + 1
-        
-      } else {
-        // Streak putus → reset
-        newStreak = 1
-        defaults.set(false, forKey: fireActiveKey)
-      }
+
+    // Ambil data streak
+    func fetchStreakData(completion: @escaping (_ streak: Int, _ lastCheckIn: Date?, _ fireActive: Bool) -> Void) {
+        guard let doc = streakDoc() else { return }
+
+        doc.getDocument { snapshot, error in
+            let streak = snapshot?["streak"] as? Int ?? 0
+            let last = (snapshot?["lastCheckIn"] as? Timestamp)?.dateValue()
+            let fireActive = snapshot?["fireActive"] as? Bool ?? false
+
+            completion(streak, last, fireActive)
+        }
     }
-    
-    // Simpan perubahan
-    defaults.set(today, forKey: lastCheckInKey)
-    defaults.set(newStreak, forKey: streakCountKey)
-    
-    // Aktifkan api jika streak >= 3
-    if newStreak >= 3 {
-      defaults.set(true, forKey: fireActiveKey)
+
+    // CEK apakah sudah check-in hari ini
+    func hasCheckedInToday(_ lastCheckIn: Date?) -> Bool {
+        guard let last = lastCheckIn else { return false }
+        return calendar.isDateInToday(last)
     }
-    
-    return (newStreak, today)
-  }
+
+    // Hitung streak baru
+    func calculateStreak(from lastCheckIn: Date?, currentStreak: Int) -> Int {
+        guard let last = lastCheckIn else { return 1 }
+
+        if calendar.isDateInToday(last) {
+            return currentStreak
+        }
+
+        if let yesterday = calendar.date(byAdding: .day, value: -1, to: Date()),
+           calendar.isDate(last, inSameDayAs: yesterday) {
+            return currentStreak + 1
+        }
+
+        return 1
+    }
+
+    // Simpan streak ke Firestore (path baru)
+    func saveStreakToFirebase(streak: Int, fireActive: Bool) {
+        guard let doc = streakDoc() else { return }
+
+        doc.setData([
+            "streak": streak,
+            "fireActive": fireActive,
+            "lastCheckIn": Timestamp(date: Date())
+        ], merge: true)
+    }
+
+    // FUNCTION KOMPLIT CHECK-IN
+    func checkInToday(completion: @escaping (_ newStreak: Int) -> Void) {
+        fetchStreakData { currentStreak, lastCheckIn, fireActive in
+
+            let updatedStreak = self.calculateStreak(from: lastCheckIn, currentStreak: currentStreak)
+            let fireNowActive = updatedStreak >= 3
+
+            self.saveStreakToFirebase(streak: updatedStreak, fireActive: fireNowActive)
+
+            completion(updatedStreak)
+        }
+    }
 }
 
 #Preview {
