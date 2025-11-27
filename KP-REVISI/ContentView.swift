@@ -16,54 +16,70 @@ fileprivate struct AccountsStore {
 struct ContentView: View {
   @State var selectedOption = "Pemasukan"
   @EnvironmentObject var financeData: DataKeuangan
-  
   @StateObject var loginVM = LoginViewModel()
   
   @AppStorage("isLoggedIn") var isLoggedIn: Bool = false
   @AppStorage("uid") var uid: String = ""
   @AppStorage("username") var username: String = ""
+  
   @State private var showLogoutConfirmation = false
-  @State private var showProfileSheet: Bool = false
+  @State private var showProfileSheet = false
   
   var body: some View {
     NavigationStack {
-      VStack(spacing: 20) {
+      ZStack {
         
-        // SALDO
-        VStack(alignment: .leading) {
-          Text("Saldo Saat Ini")
-            .font(.headline)
-            .foregroundStyle(.secondary)
+        // ❄️ Cool Gradient Background
+        LinearGradient(colors: [.blue.opacity(0.15),
+                                .purple.opacity(0.15)],
+                       startPoint: .top,
+                       endPoint: .bottom)
+        .ignoresSafeArea()
+        
+        VStack(spacing: 24) {
           
-          Text(financeData.hitungSaldo(), format: .currency(code: "IDR"))
-            .font(.largeTitle)
-            .fontWeight(.bold)
-        }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.blue.opacity(0.15))
-        .cornerRadius(16)
-        .padding(.horizontal)
-        
-        // PICKER
-        Picker("Pilih tampilan", selection: $selectedOption) {
-          Text("Pemasukan").tag("Pemasukan")
-          Text("Pengeluaran").tag("Pengeluaran")
-        }
-        .pickerStyle(.segmented)
-        .padding(.horizontal)
-        
-        // VIEW
-        if selectedOption == "Pemasukan" {
-          PemasukanView()
-        } else {
-          PengeluaranView()
-        }
-        
-        Spacer()
-        
-        StreakView()
+          // ========== SALDO CARD ==========
+          VStack(alignment: .leading, spacing: 8) {
+            Text("Saldo Saat Ini")
+              .font(.headline)
+              .foregroundStyle(.secondary)
+            
+            Text(financeData.hitungSaldo(),
+                 format: .currency(code: "IDR"))
+            .font(.system(size: 34, weight: .bold))
+          }
           .padding()
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .background(
+            RoundedRectangle(cornerRadius: 18)
+              .fill(.ultraThinMaterial)
+              .shadow(color: .black.opacity(0.1),
+                      radius: 10, y: 6)
+          )
+          .padding(.horizontal)
+          
+          // ========== PICKER ==========
+          Picker("Pilih tampilan", selection: $selectedOption) {
+            Text("Pemasukan").tag("Pemasukan")
+            Text("Pengeluaran").tag("Pengeluaran")
+          }
+          .pickerStyle(.segmented)
+          .padding(.horizontal)
+          
+          // ========== MAIN VIEW ==========
+          if selectedOption == "Pemasukan" {
+            PemasukanView()
+          } else {
+            PengeluaranView()
+          }
+          
+          Spacer()
+          
+          // ========== STREAK ==========
+          StreakView()
+            .padding(.horizontal)
+            .padding(.bottom, 12)
+        }
       }
       .navigationTitle("Keuangan")
       .navigationBarTitleDisplayMode(.inline)
@@ -73,50 +89,108 @@ struct ContentView: View {
             showProfileSheet = true
           } label: {
             HStack(spacing: 8) {
-              Image(systemName: "person.crop.circle")
+              Image(systemName: "person.circle.fill")
+                .font(.title3)
               if !username.isEmpty {
                 Text(username)
+                  .fontWeight(.medium)
               }
             }
           }
-          .accessibilityLabel("Profil")
         }
       }
       .sheet(isPresented: $showProfileSheet) {
         NavigationStack {
-          UserProfileSheet(username: $username,
-                           showLogoutConfirmation: $showLogoutConfirmation,
-                           isLoggedIn: $isLoggedIn,
-                           uid: $uid,
-                           financeData: financeData)
+          UserProfileSheet(
+            username: $username,
+            showLogoutConfirmation: $showLogoutConfirmation,
+            isLoggedIn: $isLoggedIn,
+            uid: $uid,
+            financeData: financeData
+          )
           .navigationTitle("Profil")
           .navigationBarTitleDisplayMode(.inline)
           .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-              EditButton()
-            }
             ToolbarItem(placement: .topBarTrailing) {
               Button("Selesai") { showProfileSheet = false }
             }
           }
         }
       }
-      // ========= AMBIL DATA FIRESTORE =========
       .task {
-        
         let finalUID = loginVM.uid.isEmpty ? uid : loginVM.uid
-        
         if !finalUID.isEmpty {
           let data = try? await TransaksiService().ambilTransaksiUser(uid: finalUID)
-          
-          await MainActor.run {
-            financeData.trx = data ?? []
-          }
+          await MainActor.run { financeData.trx = data ?? [] }
         }
       }
     }
   }
 }
+struct UserProfileView: View {
+  @Binding var username: String
+  @State private var showEditSheet = false
+  
+  private var initials: String {
+    let parts = username.split(separator: " ")
+    if let first = parts.first {
+      return String(first.prefix(2)).uppercased()
+    }
+    return String(username.prefix(2)).uppercased()
+  }
+  
+  var body: some View {
+    ScrollView {
+      VStack(spacing: 24) {
+        
+        // Avatar besar
+        ZStack {
+          Circle()
+            .fill(
+              LinearGradient(
+                colors: [.blue.opacity(0.9), .purple.opacity(0.8)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+              )
+            )
+            .frame(width: 100, height: 100)
+          
+          Text(initials.isEmpty ? "?" : initials)
+            .foregroundStyle(.white)
+            .font(.system(size: 40, weight: .bold))
+        }
+        .padding(.top, 32)
+        
+        // Username
+        Text(username.isEmpty ? "Pengguna" : username)
+          .font(.title2.bold())
+        
+        // Tombol Edit Profil
+        Button {
+          showEditSheet = true
+        } label: {
+          Label("Edit Profil", systemImage: "pencil")
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.bordered)
+        .padding(.horizontal)
+      }
+      .padding()
+    }
+    .navigationTitle("Profil")
+    .navigationBarTitleDisplayMode(.inline)
+    .sheet(isPresented: $showEditSheet) {
+      UserProfileSheet(
+        username: $username,
+        showLogoutConfirmation: .constant(false),
+        isLoggedIn: .constant(true),
+        uid: .constant(""),
+        financeData: DataKeuangan()
+      )
+    }
+  }
+}
+
 
 struct UserProfileSheet: View {
   @Binding var username: String
@@ -217,66 +291,6 @@ struct UserProfileSheet: View {
   }
 }
 
-struct UserProfileView: View {
-  @Binding var username: String
-  @FocusState private var focused: Bool
-  
-  private var initials: String {
-    let parts = username.split(separator: " ")
-    if let first = parts.first {
-      return String(first.prefix(2)).uppercased()
-    }
-    return String(username.prefix(2)).uppercased()
-  }
-  
-  @State private var error: String?
-  
-  var body: some View {
-    Form {
-      Section(header: Text("Avatar")) {
-        HStack(spacing: 16) {
-          ZStack {
-            Circle()
-              .fill(Color.blue.opacity(0.2))
-              .frame(width: 64, height: 64)
-            Text(initials.isEmpty ? "?" : initials)
-              .font(.headline)
-              .foregroundStyle(.blue)
-          }
-          Text("Avatar akan menampilkan inisial dari username Anda.")
-            .font(.footnote)
-            .foregroundStyle(.secondary)
-        }
-        .padding(.vertical, 4)
-      }
-      Section(header: Text("Akun")) {
-        HStack {
-          Image(systemName: "person.fill")
-            .foregroundStyle(.blue)
-          Text(username)
-        }
-        if let error {
-          Text(error)
-            .foregroundStyle(.red)
-            .font(.caption)
-        }
-      }
-    }
-    .onAppear {
-      focused = true
-      validate(username)
-    }
-  }
-  
-  private func validate(_ value: String) {
-    if value.trimmingCharacters(in: .whitespacesAndNewlines).count < 3 {
-      error = "Minimal 3 karakter."
-    } else {
-      error = nil
-    }
-  }
-}
-
 struct StreakView: View {
   @State private var streak: Int = StreakManager.shared.currentStreak()
   @State private var fireActive: Bool = StreakManager.shared.isFireActive()
@@ -284,51 +298,45 @@ struct StreakView: View {
   @State private var animateFlame: Bool = false
   
   var body: some View {
-    VStack(alignment: .leading, spacing: 12) {
+    HStack(spacing: 16) {
+      Image(systemName: fireActive ? "flame.fill" : "flame")
+        .foregroundStyle(fireActive ? .orange : .gray.opacity(0.8))
+        .font(.system(size: 30))
+        .scaleEffect(animateFlame ? 1.15 : 1.0)
+        .animation(.spring(), value: animateFlame)
       
-      HStack(spacing: 12) {
-        Image(systemName: fireActive ? "flame.fill" : "flame")
-          .foregroundStyle(fireActive ? .orange : .gray)
-          .font(.system(size: 28))
-          .scaleEffect(animateFlame ? 1.15 : 1.0)
-          .animation(.spring(response: 0.35, dampingFraction: 0.6), value: animateFlame)
-        
-        VStack(alignment: .leading) {
-          Text("🔥 \(streak)")
-            .font(.headline)
-          
-          Text("Streak Harian")
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-        }
-        
-        Spacer()
+      VStack(alignment: .leading, spacing: 2) {
+        Text("🔥 \(streak)")
+          .font(.title3.bold())
+        Text("Streak Harian")
+          .foregroundStyle(.secondary)
+          .font(.subheadline)
       }
-      .padding()
-      .background(.ultraThinMaterial)
-      .clipShape(RoundedRectangle(cornerRadius: 16))
+      
+      Spacer()
     }
-    .onAppear {
-      autoCheckIn()
-    }
+    .padding()
+    .background(
+      RoundedRectangle(cornerRadius: 18)
+        .fill(.ultraThinMaterial)
+        .shadow(color: .black.opacity(0.1), radius: 6, y: 3)
+    )
+    .onAppear { autoCheckIn() }
   }
   
-  // MARK: - AUTO CHECK-IN
   private func autoCheckIn() {
     if !StreakManager.shared.hasCheckedInToday() {
       let result = StreakManager.shared.checkInToday()
-      
       self.streak = result.newStreak
       self.fireActive = StreakManager.shared.isFireActive()
-      
-      // Animasi flame
-      self.animateFlame = true
+      animateFlame = true
       DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-        self.animateFlame = false
+        animateFlame = false
       }
     }
   }
 }
+
 
 final class StreakManager {
   static let shared = StreakManager()
