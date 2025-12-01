@@ -455,3 +455,4 @@ struct StreakView: View {
 #Preview { // Preview SwiftUI untuk Xcode canvas
   ContentView().environmentObject(DataKeuangan()) // Menyediakan environment object
 }
+
