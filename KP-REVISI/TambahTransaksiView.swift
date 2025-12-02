@@ -1,479 +1,142 @@
 import SwiftUI
-import Combine
-import FirebaseFirestore
-import FirebaseAuth
-
 
 struct TambahTransaksiView: View {
-  
-  let transaksiService = TransaksiService()
-  @AppStorage("uid") var uid: String = ""     // UID user yang login
-  
-  @State private var inputNominal: String = ""
-  @State private var riwayat: [Transaksi] = []
-  @State private var selectedKategori_Keluar: String = "Makanan"
-  @State private var selectedKategori_Masuk: String = "Investasi"
-  @State private var selectedDate: Date = Date()
-  @State private var showCalendar: Bool = false
-  
-  struct KategoriMeta {
-    let icon: String
-    let color: Color?
-  }
-  
-  var kategori_Keluar: [String: KategoriMeta] = [
-    "Makanan": KategoriMeta(icon: "fork.knife", color: nil),
-    "Medis": KategoriMeta(icon: "cross.case", color: nil),
-    "Transaksi": KategoriMeta(icon: "dollarsign.circle", color: nil),
-    "Hiburan": KategoriMeta(icon: "gamecontroller", color: nil),
-    "Lainnya": KategoriMeta(icon: "plus.circle", color: Color.red.opacity(0.7))
-  ]
-  
-  var kategori_Masuk: [String: KategoriMeta] = [
-    "Investasi": KategoriMeta(icon: "chart.line.uptrend.xyaxis", color: nil),
-    "Gaji": KategoriMeta(icon: "banknote", color: nil),
-    "Bonus": KategoriMeta(icon: "gift", color: nil),
-    "Uang Saku": KategoriMeta(icon: "wallet.pass", color: nil),
-    "Lainnya": KategoriMeta(icon: "plus.circle", color: Color.green.opacity(0.7))
-  ]
-  
-  private let accent = Color.black
-  private let income = Color.green
-  private let expense = Color.red
-  
-  private let headerGradient = LinearGradient(colors: [.black.opacity(0.9), .black.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing)
-  
+  @Environment(\.dismiss) private var dismiss
   @EnvironmentObject var financeData: DataKeuangan
+  @AppStorage("uid") private var uid: String = ""
+  
+  // State
+  @State private var jenis: JenisTransaksi = .masuk
+  @State private var nominal: Double = 0
+  @State private var tanggal: Date = Date()
+  @State private var kategoriMasuk: String = "Gaji"
+  @State private var kategoriKeluar: String = "Makanan"
+  @State private var isSaving = false
+  @State private var showAlert = false
+  @State private var alertTitle = ""
+  @State private var alertMessage = ""
+  
+  // Kategori bawaan
+  private let kategoriPemasukan = ["Gaji", "Bonus", "Hadiah", "Lainnya"]
+  private let kategoriPengeluaran = ["Makanan", "Transport", "Hiburan", "Tagihan", "Belanja", "Lainnya"]
   
   var body: some View {
     NavigationStack {
-      ScrollView {
-        VStack(spacing: 20) {
-          
-          // Header
-          VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
-              ZStack {
-                Circle()
-                  .fill(headerGradient)
-                  .frame(width: 36, height: 36)
-                Image(systemName: "wallet.pass")
-                  .font(.subheadline.weight(.semibold))
-                  .foregroundStyle(.white)
-              }
-              Text("Dompet")
-                .font(.title.bold())
-                .foregroundStyle(.primary)
-            }
-            Text("Catat pemasukan & pengeluaran")
-              .font(.callout)
-              .foregroundStyle(.secondary)
+      Form {
+        // Jenis Transaksi (satu kontrol saja)
+        Section {
+          Picker("Jenis", selection: $jenis) {
+            Text("Pemasukan").tag(JenisTransaksi.masuk)
+            Text("Pengeluaran").tag(JenisTransaksi.keluar)
           }
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .padding(.vertical, 8)
-          
-          // Input Card
-          VStack(spacing: 12) {
-            
-            // NOMINAL
-            VStack(alignment: .leading, spacing: 6) {
-              Text("Nominal")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-              
-              HStack(spacing: 8) {
-                Image(systemName: "dollarsign")
-                  .foregroundStyle(.secondary)
-                TextField("Masukkan nominal", text: $inputNominal)
-                  .keyboardType(.decimalPad)
-              }
-              Divider()
-            }
-            
-            // KATEGORI
-            VStack(spacing: 10) {
-              HStack {
-                Label("Keluar", systemImage: "arrow.up.circle.fill")
-                  .foregroundStyle(expense)
-                Spacer()
-                Picker("", selection: $selectedKategori_Keluar) {
-                  ForEach(kategori_Keluar.keys.sorted(), id: \.self) { kategori in
-                    Text(kategori)
-                  }
-                }
-                .tint(expense)
-                .pickerStyle(.menu)
-              }
-              Divider()
-              
-              HStack {
-                Label("Masuk", systemImage: "arrow.down.circle.fill")
-                  .foregroundStyle(income)
-                Spacer()
-                Picker("", selection: $selectedKategori_Masuk) {
-                  ForEach(kategori_Masuk.keys.sorted(), id: \.self) { kategori in
-                    Text(kategori)
-                  }
-                }
-                .tint(income)
-                .pickerStyle(.menu)
-              }
-              Divider()
-              
-              // TANGGAL
-              HStack {
-                Image(systemName: "calendar")
-                  .foregroundStyle(.secondary)
-                Text(selectedDate, format: .dateTime.day().month(.abbreviated).year())
-                  .foregroundStyle(.primary)
-                Spacer()
-                Button {
-                  withAnimation(.spring(duration: 0.45)) {
-                    showCalendar.toggle()
-                  }
-                } label: {
-                  Image(systemName: "chevron.down")
-                    .rotationEffect(.degrees(showCalendar ? 180 : 0))
-                    .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-              }
-            }
-            
-            if showCalendar {
-              DatePicker("", selection: $selectedDate, displayedComponents: .date)
-                .datePickerStyle(.graphical)
-                .tint(accent)
-                .transition(.opacity.combined(with: .scale))
-                .onChange(of: selectedDate) { _ in
-                  // TUTUP KALENDER OTOMATIS
-                  withAnimation(.spring(duration: 0.35)) {
-                    showCalendar = false
-                  }
-                }
-            }
-            
-            // BUTTON PEMASUKAN & PENGELUARAN
-            HStack(spacing: 10) {
-              Button {
-                simpanTransaksi(jenis: .masuk)
-              } label: {
-                HStack {
-                  Image(systemName: "arrow.down")
-                  Text("Pemasukan")
-                }
-                .frame(maxWidth: .infinity)
-              }
-              .buttonStyle(.borderedProminent)
-              .tint(income)
-
-              Button {
-                simpanTransaksi(jenis: .keluar)
-              } label: {
-                HStack {
-                  Image(systemName: "arrow.up")
-                  Text("Pengeluaran")
-                }
-                .frame(maxWidth: .infinity)
-              }
-              .buttonStyle(.bordered)
-              .tint(expense)
-            }
-            .opacity(inputNominal.isEmpty ? 0.6 : 1)
-            .disabled(inputNominal.isEmpty)
-          }
-          .padding(16)
-          .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-              .fill(Color(.secondarySystemBackground))
-          )
-          
-          // MINI GAME / FUN SECTION
-          VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-              Image(systemName: "gamecontroller.fill")
-                .foregroundStyle(.purple)
-              Text("Seru-seruan")
-                .font(.headline)
-                .foregroundStyle(.primary)
-              Spacer()
-            }
-            .padding(.horizontal, 4)
-
-            MiniGameView()
-              .padding(.top, 4)
-          }
-          .padding(16)
-          .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-              .fill(Color(.secondarySystemBackground))
-          )
+          .pickerStyle(.segmented)
         }
-        .padding()
-        .padding(.horizontal)
+        
+        // Nominal & Tanggal
+        Section(header: Text("Detail")) {
+          HStack {
+            Text("Nominal")
+            Spacer()
+            TextField("0", value: $nominal, format: .number)
+              .multilineTextAlignment(.trailing)
+              .keyboardType(.numberPad)
+          }
+          DatePicker("Tanggal", selection: $tanggal, displayedComponents: .date)
+        }
+        
+        // Kategori (hanya tampil sesuai jenis)
+        Section(header: Text("Kategori")) {
+          if jenis == .masuk {
+            Picker("Pilih Kategori", selection: $kategoriMasuk) {
+              ForEach(kategoriPemasukan, id: \.self) { Text($0) }
+            }
+          } else if jenis == .keluar {
+            Picker("Pilih Kategori", selection: $kategoriKeluar) {
+              ForEach(kategoriPengeluaran, id: \.self) { Text($0) }
+            }
+          }
+        }
+        
+        // Tombol simpan (kondisional label & warna)
+        Section {
+          if jenis == .masuk {
+            Button {
+              Task { await simpan() }
+            } label: {
+              HStack {
+                if isSaving { ProgressView() }
+                Text(isSaving ? "Menyimpan..." : "Simpan Pemasukan")
+                  .bold()
+              }
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(isSaving || !inputValid)
+          } else {
+            Button {
+              Task { await simpan() }
+            } label: {
+              HStack {
+                if isSaving { ProgressView() }
+                Text(isSaving ? "Menyimpan..." : "Simpan Pengeluaran")
+                  .bold()
+              }
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.red)
+            .disabled(isSaving || !inputValid)
+          }
+        }
       }
-    }
-    .navigationTitle("Dompet")
-    .navigationBarTitleDisplayMode(.inline)
-    .toolbarBackground(.bar, for: .navigationBar)
-    .toolbarBackground(.visible, for: .navigationBar)
-    .toolbarColorScheme(.light, for: .navigationBar)
-    .toolbar {
-      ToolbarItem(placement: .topBarTrailing) {
-        Image(systemName: "sparkles")
-          .foregroundStyle(.secondary)
-      }
+      .navigationTitle("Tambah Transaksi")
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Tutup") { dismiss() } } }
+      .alert(alertTitle, isPresented: $showAlert) {
+        Button("OK") { if alertTitle == "Sukses" { dismiss() } }
+      } message: { Text(alertMessage) }
     }
   }
   
-  // MARK: - FUNCTION SIMPAN TRANSAKSI
-  private func simpanTransaksi(jenis: JenisTransaksi) {
-    guard let nominal = Double(inputNominal) else { return }
+  private var inputValid: Bool {
+    nominal > 0 && (jenis == .masuk ? !kategoriMasuk.isEmpty : !kategoriKeluar.isEmpty)
+  }
+  
+  @MainActor
+  private func simpan() async {
+    guard !uid.isEmpty else {
+      alertTitle = "Gagal"
+      alertMessage = "UID tidak ditemukan. Silakan login kembali."
+      showAlert = true
+      return
+    }
+    isSaving = true
+    defer { isSaving = false }
     
-    let transaksiBaru = Transaksi(
+    let transaksi = Transaksi(
       nominal: nominal,
       jenis: jenis,
-      kategori_Masuk: selectedKategori_Masuk,
-      kategori_Keluar: selectedKategori_Keluar,
-      tanggal: selectedDate
+      kategori_Masuk: jenis == .masuk ? kategoriMasuk : "",
+      kategori_Keluar: jenis == .keluar ? kategoriKeluar : "",
+      tanggal: tanggal
     )
     
-    // Simpan ke lokal (EnvironmentObject)
-    financeData.tambahTransaksi(transaksiBaru)
-    
-    // Simpan ke FIRESTORE per-UID
-    Task {
-      if uid.isEmpty {
-        // UID kosong -> user belum login atau belum tersimpan di AppStorage
-        print("Warning: UID kosong — pastikan user sudah login sebelum menyimpan transaksi.")
-        return
-      }
-      
-      do {
-        try await transaksiService.tambahTransaksi(transaksiBaru, uid: uid) // <-- kirim uid di sini
-      } catch {
-        print("Gagal simpan transaksi ke Firestore:", error)
-      }
+    do {
+      // Simpan ke Firestore
+      try await TransaksiService().tambahTransaksi(transaksi, uid: uid)
+      // Update state lokal agar saldo langsung berubah
+      financeData.tambahTransaksi(transaksi)
+      alertTitle = "Sukses"
+      alertMessage = "Transaksi berhasil disimpan."
+      showAlert = true
+      // Reset input ringan
+      nominal = 0
+    } catch {
+      alertTitle = "Gagal"
+      alertMessage = "Tidak dapat menyimpan transaksi. Coba lagi."
+      showAlert = true
     }
-    
-    inputNominal = ""
   }
 }
 
-// MARK: - Firestore Service
-class MiniGameService {
-    private let db = Firestore.firestore()
-
-    private var userID: String {
-        Auth.auth().currentUser?.uid ?? ""
-    }
-
-    // Ambil skor terbaik
-    func fetchHighScore(completion: @escaping (Int) -> Void) {
-        let docRef = db.collection("user")
-            .document(userID)
-            .collection("MiniGame")
-            .document("Highscore")
-
-        docRef.getDocument { snapshot, error in
-            if let data = snapshot?.data(),
-               let best = data["bestScore"] as? Int {
-                completion(best)
-            } else {
-                completion(0)
-            }
-        }
-    }
-
-    // Simpan skor terbaik
-    func saveHighScore(_ score: Int) {
-        let docRef = db.collection("user")
-            .document(userID)
-            .collection("MiniGame")
-            .document("Highscore")
-
-        docRef.setData([
-            "bestScore": score,
-            "updatedAt": FieldValue.serverTimestamp()
-        ], merge: true)
-    }
-}
-
-
-
-// MARK: - ViewModel MiniGame
-class MiniGameViewModel: ObservableObject {
-  
-    @Published var bestScore: Int = 0
-
-    private lazy var service = MiniGameService()
-
-    init() {
-        loadHighScore()
-    }
-
-    func loadHighScore() {
-        service.fetchHighScore { [weak self] score in
-            DispatchQueue.main.async {
-                self?.bestScore = score
-            }
-        }
-    }
-
-    func updateBestScoreIfNeeded(newScore: Int) {
-        if newScore > bestScore {
-            bestScore = newScore
-            service.saveHighScore(newScore)
-        }
-    }
-
-    func resetHighScore() {
-        bestScore = 0
-        service.saveHighScore(0)
-    }
-}
-
-
-
-// MARK: - Mini Game View
-struct MiniGameView: View {
-    @StateObject private var vm = MiniGameViewModel()
-
-    @State private var score: Int = 0
-    @State private var timeLeft: Int = 10
-    @State private var isPlaying: Bool = false
-    @State private var targetOffset: CGSize = .zero
-    @State private var showResult: Bool = false
-
-    private let generator = UIImpactFeedbackGenerator(style: .light)
-
-    
-    var body: some View {
-        VStack(spacing: 12) {
-            // Header skor & waktu
-            HStack {
-                Label("Skor: \(score)", systemImage: "star.fill")
-                    .foregroundStyle(.yellow)
-                Spacer()
-                Label("Waktu: \(timeLeft)s", systemImage: "clock")
-                    .foregroundStyle(.secondary)
-            }
-            .font(.subheadline)
-
-            // Arena Mini Game
-            ZStack {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color(.tertiarySystemBackground))
-                    .frame(height: 160)
-
-                if isPlaying {
-                    Button(action: hitTarget) {
-                        Image(systemName: "target")
-                            .font(.system(size: 28, weight: .bold))
-                            .foregroundStyle(.pink)
-                            .padding(18)
-                            .background(Circle().fill(Color(.systemBackground)))
-                            .shadow(radius: 4)
-                    }
-                    .offset(targetOffset)
-                    .animation(.spring(response: 0.35, dampingFraction: 0.8), value: targetOffset)
-                } else {
-                    VStack(spacing: 8) {
-                        if showResult {
-                            Text("Waktu Habis!")
-                                .font(.headline)
-                            Text("Skor: \(score)  •  Rekor: \(vm.bestScore)")
-                                .foregroundStyle(.secondary)
-                        } else {
-                            Text("Tap Target!")
-                                .font(.headline)
-                            Text("Ketuk target sebanyak mungkin dalam 10 detik.")
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Button(action: startGame) {
-                            Label(showResult ? "Main Lagi" : "Mulai", systemImage: "play.fill")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.borderedProminent)
-                    }
-                    .padding()
-                }
-            }
-
-            // Rekor terbaik
-            if vm.bestScore > 0 {
-                HStack {
-                    Image(systemName: "trophy.fill").foregroundStyle(.orange)
-                    Text("Rekor terbaik: \(vm.bestScore)")
-                    Spacer()
-                    Button(role: .destructive) { vm.resetHighScore() } label: {
-                        Label("Reset", systemImage: "arrow.counterclockwise")
-                    }
-                    .labelStyle(.iconOnly)
-                }
-                .font(.footnote)
-                .transition(.opacity)
-            }
-        }
-        .onAppear { generator.prepare() }
-    }
-
-
-    // MARK: - Game Logic
-
-    private func startGame() {
-        score = 0
-        timeLeft = 10
-        showResult = false
-        isPlaying = true
-        moveTarget(within: 140)
-
-        generator.impactOccurred(intensity: 0.8)
-
-        DispatchQueue.main.async {
-            tick()
-        }
-    }
-
-    private func tick() {
-        guard isPlaying else { return }
-        if timeLeft > 0 {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                timeLeft -= 1
-                tick()
-            }
-        } else {
-            endGame()
-        }
-    }
-
-    private func endGame() {
-        isPlaying = false
-        showResult = true
-        vm.updateBestScoreIfNeeded(newScore: score)
-    }
-
-    private func hitTarget() {
-        guard isPlaying else { return }
-        score += 1
-        generator.impactOccurred(intensity: 0.6)
-        moveTarget(within: 140)
-    }
-
-    private func moveTarget(within radius: CGFloat) {
-        let dx = CGFloat.random(in: -radius...radius)
-        let dy = CGFloat.random(in: -radius...radius)
-        withAnimation {
-            targetOffset = CGSize(width: dx, height: dy)
-        }
-    }
-}
-
-
-
-// MARK: - Preview
 #Preview {
-    MiniGameView()
+  TambahTransaksiView().environmentObject(DataKeuangan())
 }
-

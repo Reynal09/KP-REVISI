@@ -11,12 +11,18 @@ struct PengeluaranView: View {
   }
   
   private let kategori_Keluar: [String: (icon: String, color: Color)] = [
-    "Makanan": ("fork.knife", .orange),
-    "Transport": ("car", .red),
-    "Hiburan": ("gamecontroller", .pink),
-    "Tagihan": ("doc.text", .purple),
-    "Belanja": ("bag", .indigo),
-    "Lainnya": ("minus.circle", .red.opacity(0.7))
+    // Merah tua
+    "Makanan": ("fork.knife", Color(red: 0.60, green: 0.05, blue: 0.05)),
+    // Merah terang/cerah
+    "Transport": ("car", Color(red: 1.00, green: 0.30, blue: 0.30)),
+    // Merah muda/rose
+    "Hiburan": ("gamecontroller", Color(red: 1.00, green: 0.60, blue: 0.70)),
+    // Merah keungu-an (maroon)
+    "Tagihan": ("doc.text", Color(red: 0.55, green: 0.00, blue: 0.20)),
+    // Merah oranye
+    "Belanja": ("bag", Color(red: 1.00, green: 0.45, blue: 0.20)),
+    // Merah lembut
+    "Lainnya": ("minus.circle", Color(red: 0.90, green: 0.40, blue: 0.40))
   ]
   
   private struct PieSlice: Identifiable,Equatable {
@@ -115,10 +121,10 @@ struct PengeluaranView: View {
             
             ForEach(sortedTransactions, id: \.self) { trx in
                 HStack(spacing: 12) {
-                    Image(systemName: "arrow.down.circle")
-                        .foregroundStyle(.green)
+                    Image(systemName: "arrow.up.circle")
+                        .foregroundStyle(.red)
                     VStack(alignment: .leading) {
-                        Text(trx.kategori_Masuk)
+                        Text(trx.kategori_Keluar)
                             .fontWeight(.semibold)
                         Text(trx.tanggal, format: .dateTime.day().month().year())
                             .font(.caption)
@@ -126,7 +132,7 @@ struct PengeluaranView: View {
                     }
                     Spacer()
                     Text(trx.nominal, format: .currency(code: "IDR"))
-                        .foregroundStyle(.green)
+                        .foregroundStyle(.red)
                 }
                 Divider()
             }

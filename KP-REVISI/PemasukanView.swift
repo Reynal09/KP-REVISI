@@ -11,10 +11,14 @@ struct PemasukanView: View {
   }
   
   private let kategori_Masuk: [String: (icon: String, color: Color)] = [
-    "Gaji": ("creditcard", .green),
-    "Bonus": ("gift", .teal),
-    "Investasi": ("chart.line.uptrend.xyaxis", .mint),
-    "Lainnya": ("plus.circle", .green.opacity(0.7))
+    // Hijau tua
+    "Gaji": ("creditcard", Color(red: 0.00, green: 0.45, blue: 0.20)),
+    // Hijau muda
+    "Bonus": ("gift", Color(red: 0.60, green: 0.90, blue: 0.60)),
+    // Hijau neon (cerah)
+    "Investasi": ("chart.line.uptrend.xyaxis", Color(red: 0.40, green: 1.00, blue: 0.40)),
+    // Hijau medium lembut
+    "Lainnya": ("plus.circle", Color(red: 0.20, green: 0.70, blue: 0.40))
   ]
   
   private struct PieSlice: Identifiable,Equatable {
@@ -144,3 +148,4 @@ struct PemasukanView: View {
 #Preview {
   PemasukanView().environmentObject(DataKeuangan())
 }
+
