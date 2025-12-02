@@ -303,7 +303,7 @@ final class StreakManager {
     private init() {}
 
     private var streakDoc: DocumentReference {
-        db.collection("users")
+        db.collection("user")
             .document(userID)
             .collection("Streak")
             .document("Daily")
