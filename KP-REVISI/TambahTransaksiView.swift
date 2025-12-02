@@ -119,7 +119,6 @@ struct TambahTransaksiView: View {
       tanggal: tanggal
     )
     
-    
     do {
       // Simpan ke Firestore
       try await TransaksiService().tambahTransaksi(transaksi, uid: uid)
